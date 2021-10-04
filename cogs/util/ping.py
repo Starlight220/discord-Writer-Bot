@@ -1,4 +1,4 @@
-import discord
+import discord, lib
 from discord.ext import commands
 from structures.guild import Guild
 

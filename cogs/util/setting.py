@@ -73,7 +73,7 @@ class Setting(commands.Cog, CommandWrapper):
         if setting in ['disable', 'enable']:
             if not (value in self.bot.all_commands):
                 return await context.send(user.get_mention() + ', ' + lib.get_string('setting:err:disable', guild.get_id()).format(value))
-            elif value in ['setting', 'help', 'admin']': # Don't allow disabling these commands
+            elif value in ['setting', 'help', 'admin']: # Don't allow disabling these commands
                 return await context.send(user.get_mention() + ', ' + lib.get_string('setting:err:disableSelf', guild.get_id()))
             else:
                 guild.disable_enable_command(value, setting == 'disable')
