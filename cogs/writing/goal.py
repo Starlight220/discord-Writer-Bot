@@ -1,4 +1,4 @@
-import discord, lib, time
+import discord, lib, time, math
 from discord.ext import commands
 from structures.db import Database
 from structures.user import User
@@ -6,6 +6,11 @@ from structures.wrapper import CommandWrapper
 from structures.guild import Guild
 
 class Goal(commands.Cog, CommandWrapper):
+
+    GOAL_TYPE_DAILY = 'daily'
+    GOAL_TYPE_WEEKLY = 'weekly'
+    GOAL_TYPE_MONTHLY = 'monthly'
+    GOAL_TYPE_YEARLY = 'yearly'
 
     def __init__(self, bot):
         self.bot = bot
@@ -21,7 +26,7 @@ class Goal(commands.Cog, CommandWrapper):
                 'required': False
             }
         ]
-        self.types = ['daily', 'weekly', 'monthly', 'yearly']
+        self.types = [self.GOAL_TYPE_DAILY, self.GOAL_TYPE_WEEKLY, self.GOAL_TYPE_MONTHLY, self.GOAL_TYPE_YEARLY]
 
     @commands.command(name="goal", aliases=['goals'])
     @commands.guild_only()
@@ -129,10 +134,30 @@ class Goal(commands.Cog, CommandWrapper):
             goal = user.get_goal(type)
             if goal is not None:
                 progress = user.get_goal_progress(type)
-                left = lib.secs_to_days(goal['reset'] - now)
+                seconds_left = goal['reset'] - now
+                left = lib.secs_to_days(seconds_left)
+                current_wordcount = progress['current']
+                goal_wordcount = progress['goal']
+                words_remaining = goal_wordcount - current_wordcount
+
+                # If someone has already met their goal, we don't want to calculate how many words they have left
+                if words_remaining <= 0:
+                    words_remaining = 0
+
                 text = lib.get_string('goal:yourgoal', user.get_guild()).format(type_string, goal['goal']) +  "\n"
-                text += lib.get_string('goal:status', user.get_guild()).format(progress['percent'], type_string, progress['current'], progress['goal']) + "\n"
-                text += lib.get_string('goal:timeleft', user.get_guild()).format(left, type_string)
+                text += lib.get_string('goal:status', user.get_guild()).format(progress['percent'], type_string, current_wordcount, goal_wordcount) + "\n"
+                text += lib.get_string('goal:timeleft', user.get_guild()).format(lib.format_secs_to_days(seconds_left), type_string)
+                if type != self.GOAL_TYPE_DAILY:
+                    days = left['days']
+                    # if someone has, for instance, 3 days 2 hours, count that as 4 days (remainder of today + 3 days)
+                    hours = left['hours']
+                    days = days + (1 if hours > 0 else 0)
+                    if words_remaining > 0:
+                        average_wordcount_needed = math.ceil(words_remaining / days)
+                        text += "\n" + lib.get_string('goal:rate', user.get_guild()).format(average_wordcount_needed, type_string)
+                if words_remaining == 0:
+                    # They met their goal!
+                    text += "\n" + lib.get_string('goal:met:noxp', user.get_guild()).format(type_string, goal_wordcount)
             else:
                 text = None
 
@@ -156,7 +181,7 @@ class Goal(commands.Cog, CommandWrapper):
 
             now = int(time.time())
             reset = goal['reset']
-            left = lib.secs_to_days(reset - now)
+            left = lib.format_secs_to_days(reset - now)
             return await context.send(user.get_mention() + ', ' + lib.get_string('goal:timeleft', user.get_guild()).format(left, type))
 
         else:

@@ -101,7 +101,7 @@ class Help(commands.Cog, CommandWrapper):
             event_embed.add_field(name='`event time`', value=lib.get_string('help:eventTimeSub', user.get_guild()), inline=True)
             event_embed.add_field(name='`event update 500`', value=lib.get_string('help:eventUpdateSub', user.get_guild()), inline=True)
             event_embed.add_field(name='`event me`', value=lib.get_string('help:eventMeSub', user.get_guild()), inline=True)
-            event_embed.add_field(name='`event top`', value=lib.get_string('help:eventTopSub', user.get_guild()), inline=True)
+            event_embed.add_field(name='`event top 20`', value=lib.get_string('help:eventTopSub', user.get_guild()), inline=True)
             event_embed.add_field(name='`event info`', value=lib.get_string('help:eventInfoSub', user.get_guild()), inline=True)
             event_embed.set_footer(text=lib.get_string('help:eventFooter', user.get_guild()))
 

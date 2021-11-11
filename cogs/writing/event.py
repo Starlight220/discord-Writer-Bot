@@ -88,12 +88,13 @@ class EventCommand(commands.Cog, CommandWrapper):
         elif cmd == 'info':
             return await self.run_info(context)
         elif cmd == 'top' or cmd == 'leaderboard':
-            return await self.run_top(context)
+            return await self.run_top(context, opts)
 
-    async def run_top(self, context):
+    async def run_top(self, context, number_of_users):
         """
-        Get the leaderboard of words written for this event
+        Get the leaderboard of words written for this event for up to {number} of users
         :param context:
+        :param number_of_users:
         :return:
         """
         user = User(context.message.author.id, context.guild.id, context)
@@ -109,10 +110,17 @@ class EventCommand(commands.Cog, CommandWrapper):
         if event is None:
             return await context.send(user.get_mention() + ', ' + lib.get_string('event:err:noexists', user.get_guild()))
 
+        if not number_of_users:
+            number_of_users = event.DEFAULT_LEADERBOARD_LIMIT
+        else:
+            number_of_users = lib.is_number(number_of_users[0])
+        if number_of_users is False or number_of_users <= 0 or number_of_users > event.UPPER_LEADERBOARD_LIMIT:
+            return await context.send(user.get_mention() + ', ' + lib.get_string('err:validnumberofusers', user.get_guild()))
+
         event.set_context(context)
         event.set_guild_object(context.guild)
 
-        return await context.send(embed=await event.get_leaderboard(Event.LEADERBOARD_LIMIT))
+        return await context.send(embed=await event.get_leaderboard(number_of_users))
 
     async def run_unschedule(self, context):
         """
@@ -502,7 +510,7 @@ class EventCommand(commands.Cog, CommandWrapper):
 
         # Is the event scheduled to start, but has not yet started?
         if not event.is_running() and event.is_scheduled():
-            left = lib.secs_to_days(event.get_start_time() - now)
+            left = lib.format_secs_to_days(event.get_start_time() - now)
             return await context.send(user.get_mention() + ', ' + lib.get_string('event:timetostart', user.get_guild()).format(left))
 
         # If the event is not running and it is NOT scheduled, then we don't know what time it will start.
@@ -511,7 +519,7 @@ class EventCommand(commands.Cog, CommandWrapper):
 
         # At this point, the event must be running. If it is scheduled, then we can get the time left from the end time. Otherwise, we don't know.
         elif event.is_scheduled():
-            left = lib.secs_to_days(event.get_end_time() - now)
+            left = lib.format_secs_to_days(event.get_end_time() - now)
             return await context.send(user.get_mention() + ', ' + lib.get_string('event:timeleft', user.get_guild()).format(left))
 
         else:
@@ -698,8 +706,9 @@ class EventCommand(commands.Cog, CommandWrapper):
         :param context:
         :return:
         """
+        user = User(context.message.author.id, context.guild.id, context=context, bot=self.bot)
         permissions = context.message.author.permissions_in(context.message.channel)
-        if permissions.manage_messages is not True:
+        if permissions.manage_messages is not True and not user.is_owner():
             raise commands.errors.MissingPermissions(['manage_messages'])
 
 def setup(bot):

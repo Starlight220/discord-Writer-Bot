@@ -44,13 +44,13 @@ class Reminder:
 
         message = '`' + self.message + '`' + ' (' + channel + ')\t\t'
         if left > 0:
-            message += lib.secs_to_days(left)
+            message += lib.format_secs_to_days(left)
         else:
             message += lib.get_string('remind:anytimenow', self.guild)
 
         # Is there a repeating interval?
         if self.intervaltime is not None:
-            message += '\t\t**(' + lib.get_string('remind:interval', self.guild).format(lib.secs_to_days(self.intervaltime)) + ')**'
+            message += '\t\t**(' + lib.get_string('remind:interval', self.guild).format(lib.format_secs_to_days(self.intervaltime)) + ')**'
 
         return message
 

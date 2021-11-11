@@ -12,6 +12,7 @@
     "err:commandinvoke": "**Error invoking command**\nThis could be caused by the bot not having all the correct permissions it needs on this server (READ, WRITE, EMBED_LINKS).\nIf you are sure the permissions are correct, please report this error on the Writer-Bot support server.\n\nError code: **{}**",
     "err:notimezone": "You need to set a valid timezone in order to do this. Please see `help mysetting`.",
     "err:disabled": "The moderators have disabled this command on this server.",
+    "err:validnumberofusers": "Error: Please enter a number of users between 1 and 25",
 
     "admin:argument:cmd": "What are you trying to do?",
     "admin:err:argument": "Invalid argument",
@@ -146,6 +147,8 @@
     "goal:yourgoal": "Your {} goal is to write **{}** words.",
     "goal:history": "Your recent {} goal history",
     "goal:updated": "Manually updated {} goal to: **{}**.",
+    "goal:rate": "If you write {} words a day, you will meet your {} goal!",
+    "goal:met:noxp": "You have met your {} goal of {} words!",
 
     "help:about": "Info and Stats about the bot.",
     "help:ask": "Asks you questions about your story.",
@@ -200,7 +203,7 @@
     "help:eventTimeSub": "Checks how long till the event starts or stops.",
     "help:eventUpdateSub": "Updates your event word count to 500 total words(500 can be changed to your desired word count.)",
     "help:eventMeSub": "Checks your current event word count.",
-    "help:eventTopSub": "Checks the word count leaderboard for the current event.",
+    "help:eventTopSub": "Checks the word count leaderboard for the current event. If no number is specified, defaults to 10 users.",
     "help:eventInfoSub": "Checks the info/status of the event.",
     "help:eventFooter": "`event create`, `event rename`, `event description`, `event image`, `event delete`, `event start`, and `event end` all required the MANAGE_MESSAGES permission.",
     
@@ -423,6 +426,7 @@
     "generate:type:land": "fantasy land names",
     "generate:type:book": "book titles",
     "generate:type:book_fantasy": "fantasy book titles",
+    "generate:type:book_horror": "horror book titles",
     "generate:type:book_sf": "sci-fi book titles",
     "generate:type:book_hp": "Harry Potter book titles",
     "generate:type:book_mystery": "mystery book titles",

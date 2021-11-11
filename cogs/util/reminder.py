@@ -202,7 +202,7 @@ class Remind(commands.Cog, CommandWrapper):
         reminder = Reminder.create(params)
         if reminder:
             return await context.send(user.get_mention() + ', ' + lib.get_string('remind:created', user.get_guild()).format(
-                lib.secs_to_days(remind_time - now))
+                lib.format_secs_to_days(remind_time - now))
             )
 
 

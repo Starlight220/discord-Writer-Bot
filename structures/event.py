@@ -5,7 +5,10 @@ from structures.user import User
 class Event:
 
     DEFAULT_COLOUR = 15105570
-    LEADERBOARD_LIMIT = 10
+    # By default, limit leaderboard to 10 users
+    DEFAULT_LEADERBOARD_LIMIT = 10
+    # Because of discord limits, limit the leaderboard to 25 users
+    UPPER_LEADERBOARD_LIMIT = 25
     TASKS = {
         'start': 'start',  # This is the task for starting the event
         'end': 'end',  # This is the task for ending the event
@@ -409,6 +412,7 @@ class Event:
 
         # If there is no limit, don't show the footer
         if limit is None:
+            limit = self.DEFAULT_LEADERBOARD_LIMIT
             footer = None
 
         # If the event is finished, don't show the footer and adjust the description to take out 'so far'
@@ -420,10 +424,17 @@ class Event:
         if not image or len(image) == 0:
             image = config.avatar
 
+        # We don't want to go over discord's character limit in a message
+        character_count = 0
+
         embed = discord.Embed(title=title, color=self.get_colour(), description=description)
+
+        character_count += lib.get_character_count(title + description)
+
         embed.set_thumbnail(url=image)
         if footer:
             embed.set_footer(text=footer, icon_url=config.avatar)
+            character_count += lib.get_character_count(footer)
 
         # Get an array of all the user ids, so we can fetch them and make sure they still exist on the guild.
         user_ids = list(map(lambda row: row['user'], users))
@@ -445,18 +456,18 @@ class Event:
             for user in users:
 
                 member = find_member(int(user['user']))
-                if member is not None and position <= self.LEADERBOARD_LIMIT:
+                if member is not None and position <= limit:
 
                     # Build the name and words variables to display in the list
                     name = str(position) + '. ' + member.display_name
                     words = str(user['words']) + ' ' + lib.get_string('words', self.get_guild())
 
                     # Embed this user result as a field
-                    embed.add_field(name=name, value=words, inline=False)
+                    if lib.get_character_count(name + words) + character_count <= lib.MAXIMUM_MESSAGE_CHARACTER_LIMIT:
+                        embed.add_field(name=name, value=words, inline=False)
 
                     # Increment position
                     position += 1
-
         return embed
 
     def _task_prechecks(self, bot):

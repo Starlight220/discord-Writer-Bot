@@ -66,6 +66,9 @@ class WriterBot(AutoShardedBot):
         elif isinstance(error, commands.errors.MissingPermissions):
             user = User(context.message.author.id, context.guild.id, context)
             return await context.send(user.get_mention() + ', ' + str(error))
+        elif isinstance(error, commands.errors.CommandInvokeError) and ('Broken pipe' in str(error) or 'Connection reset by peer' in str(error)):
+            lib.error(traceback.format_exception(type(error), error, error.__traceback__), 'NETWORK')
+            return await context.send('Sorry, I am currently experiencing network issues. Please wait a moment and try again.')
         elif isinstance(error, commands.errors.CommandInvokeError):
             code = lib.error('CommandInvokeError in command `{}`: {}'.format(context.command, str(error)))
             lib.error(traceback.format_exception(type(error), error, error.__traceback__), code)
@@ -218,7 +221,7 @@ class WriterBot(AutoShardedBot):
         try:
             await Task.execute_all(self)
         except Exception as e:
-            lib.out('Exception: ' + str(e))
+            lib.error( traceback.format_exception(type(e), e, e.__traceback__), 'TASK' )
 
     @tasks.loop(hours=CLEANUP_TASK_LOOP)
     async def cleanup_tasks(self):

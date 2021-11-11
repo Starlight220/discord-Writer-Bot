@@ -97,7 +97,7 @@ class Project:
             {'genre': 'erotic', 'emote': ':hot_pepper:'},
             {'genre': 'comic', 'emote': ':art:'},
             {'genre': 'action', 'emote': ':gun:'},
-            {'genre': 'drama', 'emote': ':performing arts:'},
+            {'genre': 'drama', 'emote': ':performing_arts:'},
             {'genre': 'fanfic', 'emote': ':art:'},
             {'genre': 'sfw', 'emote': ':green_circle:'},
             {'genre': 'nsfw', 'emote': ':red_circle:'},

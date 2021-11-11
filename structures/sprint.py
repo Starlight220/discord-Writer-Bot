@@ -333,7 +333,8 @@ class Sprint:
         if ending is not None:
             update['ending_wc'] = ending
 
-        update['sprint_type'] = sprint_type
+        if sprint_type is not None:
+            update['sprint_type'] = sprint_type
 
         # If the sprint hasn't started yet, set the user's start time to the sprint start time, so calculations will work correctly.
         if not self.has_started():
@@ -386,9 +387,11 @@ class Sprint:
 
             else:
 
-                # If they didn't submit an ending word count, use their current one
+                # If they didn't submit an ending word count, use their current one and update the DB row with it.
                 if user_sprint['ending_wc'] == 0:
+
                     user_sprint['ending_wc'] = user_sprint['current_wc']
+                    self.update_user(user_id, ending=user_sprint['ending_wc'])
 
                 # Now we only process their result if they have declared something and it's different to their starting word count
                 user_sprint['starting_wc'] = int(user_sprint['starting_wc'])
@@ -464,7 +467,7 @@ class Sprint:
             is_sprint_winner = result['wordcount'] == highest_word_count
             if position <= 5 and len(results) > 1:
 
-                extra_xp = math.ceil(Experience.XP_WIN_SPRINT / self.WINNING_POSITION if is_sprint_winner else position)
+                extra_xp = math.ceil(Experience.XP_WIN_SPRINT / (self.WINNING_POSITION if is_sprint_winner else position))
                 result['xp'] += extra_xp
                 await result['user'].add_xp(extra_xp)
 

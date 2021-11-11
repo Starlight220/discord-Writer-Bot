@@ -1,10 +1,14 @@
 import json, math, os, pytz, random, string
 from collections import namedtuple
 from pprint import pprint
+from functools import lru_cache
 from os import path
 from datetime import datetime, timezone, timedelta, time
 from dateutil import relativedelta
 from structures.db import Database
+
+# Discord has a maximum of 2000 characters per message
+MAXIMUM_MESSAGE_CHARACTER_LIMIT = 2000
 
 def get(file,as_object=True):
     """
@@ -13,7 +17,6 @@ def get(file,as_object=True):
     @param as_object: Return as an object (can be accessed via object.property). Otherwise object['property'].
     @return object
     """
-
     with open(file, 'r') as data:
         if as_object:
             return json.load(data, object_hook=lambda d: namedtuple('X', d.keys())(*d.values()))
@@ -49,6 +52,17 @@ def is_supported_language(lang):
     """
     return lang in get_supported_languages()
 
+def get_character_count(str):
+    """
+    Get the character count for a given string
+    :param str:
+    :return:
+    """
+
+    if not str:
+        return 0
+    return len(str)
+
 def get_string(str, guild_id):
     """
     Load a language string
@@ -56,8 +70,13 @@ def get_string(str, guild_id):
     @param guild_id: The guild ID
     @return string: The full string in the correct language
     """
-
     lang = get_lang(guild_id)
+    return _get_translated_string(str, lang)
+
+@lru_cache(maxsize=1024)
+def _get_translated_string(str, lang):
+    out("Fetching translation for " + str + " in " + lang)
+
     path = f'./data/lang/{lang}.json'
     strings = get(path, False)
     return strings[str] if str in strings else f'[[{str}]]'
@@ -209,12 +228,11 @@ def secs_to_mins(seconds):
 
     return result
 
-def secs_to_days(seconds, format="auto"):
+def secs_to_days(seconds):
     """
     Convert a number of seconds, into days, hours, minutes and seconds
     E.g. 65 seconds -> 0 days, 1 minute 5 seconds
     :param seconds:
-    :param format:
     :return: dict
     """
     tdelta = timedelta(seconds=seconds)
@@ -222,16 +240,29 @@ def secs_to_days(seconds, format="auto"):
     d["hours"], rem = divmod(tdelta.seconds, 3600)
     d["minutes"], d["seconds"] = divmod(rem, 60)
 
-    # If we pass 'auto' through then only return the formats which are relevant.
-    if format == "auto":
-        format = ""
-        format += "{days} day(s), " if d['days'] > 0 else ""
-        format += "{hours} hour(s), " if d['hours'] > 0 else ""
-        format += "{minutes} min(s), " if d['minutes'] > 0 else ""
-        format += "{seconds} sec(s), " if d['seconds'] > 0 else ""
-        format = format.rsplit(', ', 1)[0]
+    return d
 
-    return format.format(**d)
+def format_secs_to_days(seconds):
+    """
+    Convert a number of seconds into days, hours, minutes & seconds, and return a formatted string
+    {
+      "days": 3,
+      "hours": 2,
+      "minutes": 30,
+      "seconds": 20
+    } -> results in "3 day(s), 2 hour(s), 30 minute(s), 20 second(s)"
+    :param seconds:
+    :return: string
+    """
+    dictionary = secs_to_days(seconds)
+    format = ""
+    format += "{days} day(s), " if dictionary['days'] > 0 else ""
+    format += "{hours} hour(s), " if dictionary['hours'] > 0 else ""
+    format += "{minutes} min(s), " if dictionary['minutes'] > 0 else ""
+    format += "{seconds} sec(s), " if dictionary['seconds'] > 0 else ""
+    format = format.rsplit(', ', 1)[0]
+    return format.format(**dictionary)
+
 
 def is_valid_datetime(value, format):
     """

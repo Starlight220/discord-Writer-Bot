@@ -398,6 +398,7 @@
     "generate:type:land": "noms de pays fantasy (en anglais)",
     "generate:type:book": "titres de livres (en anglais)",
     "generate:type:book_fantasy": "titres de livres fantasy",
+    "generate:type:book_horror": "titres de livres d'horreur (en anglais)",
     "generate:type:book_sf": "titres de livres de science-fiction (en anglais)",
     "generate:type:book_hp": "titres de livre Harry Potter",
     "generate:type:book_mystery": "titres de livres de mystère (en anglais)",
