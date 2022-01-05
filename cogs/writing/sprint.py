@@ -638,7 +638,7 @@ class SprintCommand(commands.Cog, CommandWrapper):
         # Check if sprint is finished but not marked as completed, in which case we can mark it as complete
         if sprint.is_finished() and sprint.is_declaration_finished():
             # Mark the sprint as complete
-            await sprint.complete()
+            await sprint.complete(context)
             # Reload the sprint object, as now there shouldn't be a pending one
             sprint = Sprint(user.get_guild())
 
