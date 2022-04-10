@@ -1,24 +1,33 @@
-import discord, lib
-from discord.ext import commands
-from structures.guild import Guild
+import discord
+from interactions import Client, Extension, extension_command as command, CommandContext
 
-class Invite(commands.Cog):
+import lib
+# from structures.guild import Guild
 
-    @commands.command(name='invite')
-    @commands.guild_only()
-    async def invite(self, context):
-        """
+
+class Invite(Extension):
+    def __init__(self, bot):
+        self.client: Client = bot
+
+    @command(
+        name="invite",
+        scope=894554679143464960,
+        description="""
         Displays an embed with and invite link
         """
-        if not Guild(context.guild).is_command_enabled('invite'):
-            return await context.send(lib.get_string('err:disabled', context.guild.id))
+    )
+    async def invite(self, context: CommandContext):
+        # TODO: fix Guild -- `context.guild` doesn't exist anymore; use `context.guild_id`!
+        # if not Guild(context.guild).is_command_enabled('invite'):
+        #     return await context.send(lib.get_string('err:disabled', context.guild.id))
 
-        config=lib.get('./settings.json')
-        invite_embed=discord.Embed(title='Invite Link', color=652430, url=config.invite_url)
-        invite_embed.add_field(name='Click the title for the invite link!', value="Use the Above link to invite the bot to your servers!")
+        config = lib.get('./settings.json')
+        invite_embed = discord.Embed(title='Invite Link', color=652430, url=config.invite_url)
+        invite_embed.add_field(name='Click the title for the invite link!',
+                               value="Use the Above link to invite the bot to your servers!")
 
         await context.send(embed=invite_embed)
 
 
 def setup(bot):
-    bot.add_cog(Invite(bot))
+    Invite(bot)
