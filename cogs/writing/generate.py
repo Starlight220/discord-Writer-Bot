@@ -1,13 +1,10 @@
-import lib
 import time
-from discord.ext import commands
+
+from interactions import Extension, Option, OptionType, Choice, CommandContext
+from interactions import extension_command as command
+
 from structures.generator import NameGenerator
 from structures.user import User
-from structures.wrapper import CommandWrapper
-from structures.guild import Guild
-from discord_slash import cog_ext, SlashContext
-from discord_slash.model import SlashCommandOptionType
-from discord_slash.utils.manage_commands import create_option, create_choice
 
 VISIBLE_TO_EVERYONE = 0
 HIDDEN_EPHEMERAL = 1
@@ -30,49 +27,49 @@ SUPPORTED_TYPES = {
     'question_world': 'World-building question',
 }
 
-class Generate(commands.Cog, CommandWrapper):
 
+class Generate(Extension):
     def __init__(self, bot):
         self.bot = bot
         self._urls = {
             'face': 'https://thispersondoesnotexist.com/image'
         }
 
-    @cog_ext.cog_slash(
+    @command(
         name="generate",
         description="Random generator for character names, place names, land names, book titles, story ideas, prompts.",
         options=[
-            create_option(
+            Option(
                 name="type",
                 description="What to generate",
                 required=True,
-                option_type=SlashCommandOptionType.STRING,
+                type=OptionType.STRING,
                 choices=[
-                    create_choice(
+                    Choice(
                         name=name,
                         value=value
                     ) for value, name in SUPPORTED_TYPES.items()
                 ]
             ),
-            create_option(
+            Option(
                 name="amount",
                 description="How many items to generate",
                 required=False,
-                option_type=SlashCommandOptionType.INTEGER
+                type=OptionType.INTEGER
             ),
-            create_option(
+            Option(
                 name="hidden",
                 description="Should the response be in a hidden (ephemeral) message?",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=False,
                 choices=[
-                    create_choice(VISIBLE_TO_EVERYONE, 'Visible to everyone'),
-                    create_choice(HIDDEN_EPHEMERAL, 'Visible only to you')
+                    Choice(value=VISIBLE_TO_EVERYONE, name='Visible to everyone'),
+                    Choice(value=HIDDEN_EPHEMERAL, name='Visible only to you')
                 ]
             )
         ]
     )
-    async def generate(self, context: SlashContext, type: str, amount: int = None,
+    async def generate(self, context: CommandContext, type: str, amount: int = None,
                        hidden: int = VISIBLE_TO_EVERYONE):
         """
         Random generator for various things (character names, place names, land names, book titles, story ideas, prompts).
@@ -85,13 +82,14 @@ class Generate(commands.Cog, CommandWrapper):
         :rtype void:
         """
         # Send "bot is thinking" message, to avoid failed commands if latency is high.
-        await context.defer(hidden=hidden == HIDDEN_EPHEMERAL)
+        await context.defer(ephemeral=hidden == HIDDEN_EPHEMERAL)
 
+        # TODO: fix guild usage
         # Make sure the guild has this command enabled.
-        if not Guild(context.guild).is_command_enabled('generate'):
-            return await context.send(lib.get_string('err:disabled', context.guild.id))
+        # if not Guild(context.guild).is_command_enabled('generate'):
+        #     return await context.send(lib.get_string('err:disabled', context.guild.id))
 
-        user = User(context.author_id, context.guild.id, context)
+        user = User(context.author.id, context.guild_id, context)
 
         # If no amount specified, use the default
         if amount is None:
@@ -113,10 +111,6 @@ class Generate(commands.Cog, CommandWrapper):
 
         return await context.send(user.get_mention() + ', ' + results['message'] + names)
 
-    @commands.command(name="generate")
-    @commands.guild_only()
-    async def old(self, context):
-        await context.send(lib.get_string('err:slash', context.guild.id))
 
 def setup(bot):
     bot.add_cog(Generate(bot))

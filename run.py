@@ -22,7 +22,7 @@
 
 import os
 import lib
-import interactions
+import interactions.ext.enhanced
 
 
 def load_commands_on(bot: interactions.Client):
@@ -49,7 +49,8 @@ def load_commands_on(bot: interactions.Client):
 config = lib.get('./settings.json')
 
 bot = interactions.Client(config.token)
-
+bot.load("interactions.ext.enhanced")
+# bot.load("cogs.writing.sprint")
 load_commands_on(bot)
 
 bot.start()

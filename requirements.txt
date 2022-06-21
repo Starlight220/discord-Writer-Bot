@@ -5,3 +5,4 @@ pytz==2020.1
 python-dateutil==2.4.1
 validator_collection==1.5.0
 discord-py-interactions==4.1.0
+enhanced==3.2.1

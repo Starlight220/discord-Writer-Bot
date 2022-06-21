@@ -1,13 +1,11 @@
 import time
+from asyncio import sleep
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
-from discord.ext import commands
-from discord_slash import cog_ext
-from discord_slash.context import SlashContext, ComponentContext, InteractionContext
-from discord_slash.model import ComponentType, SlashCommandOptionType
-from discord_slash.utils.manage_commands import create_option, create_choice
-from discord_slash.utils.manage_components import create_select, create_select_option, create_actionrow
+from interactions import Client, Option, OptionType, CommandContext, Choice, ComponentContext, \
+    extension_component, ComponentType
+from interactions.ext.enhanced import EnhancedExtension, ext_subcommand_base
 
 import lib
 from structures.guild import Guild
@@ -18,65 +16,74 @@ from structures.user import User
 
 PROJECT_SELECTOR_ID = 'sprint_select_project'
 
-class SprintCommand(commands.Cog):
-    DEFAULT_LENGTH = 20  # 20 minutes
-    DEFAULT_DELAY = 2  # 2 minutes
-    MAX_LENGTH = 60  # 1 hour
-    MAX_DELAY = 60 * 24  # 24 hours
-    WPM_CHECK = 150  # If WPM exceeds this amount, check that the user meant to submit that many words
 
-    def __init__(self, bot):
-        self.bot = bot
+class SprintCommand(EnhancedExtension):
+    # 20 minutes
+    DEFAULT_LENGTH = 20
+    # 2 minutes
+    DEFAULT_DELAY = 2
+    # 1 hour
+    MAX_LENGTH = 60
+    # 24 hours
+    MAX_DELAY = 60 * 24
+    # If WPM exceeds this amount, check that the user meant to submit that many words
+    WPM_CHECK = 150
 
-    @cog_ext.cog_subcommand(
+    def __init__(self, bot: Client):
+        self.bot: Client = bot
+
+    sprint_base = ext_subcommand_base(
         base="sprint",
+        description="TODO",
+        scope=894554679143464960
+    )
+
+    @sprint_base.subcommand(
         name="for",
         description="Start a sprint",
         options=[
-            create_option(
+            Option(
                 name="length",
                 description="length",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=True
             ),
-            create_option(
-                name="in",
+            Option(
+                name="in_",
                 description="start the sprint in x time from now. NOTE: `in` and `at` are "
                             "mutually exclusive!",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=False
             ),
-            create_option(
+            Option(
                 name="at",
                 description="start the sprint at a given time past the hour. NOTE: `in` and `at` "
                             "are mutually exclusive!",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=False
             )
         ],
-        # `in` is a reserved identifier in Python
-        connector={'in': 'start'}
     )
-    async def sprint_for(self, context: SlashContext, length: int, start: int = None,
+    async def sprint_for(self, context: CommandContext, length: int, in_: int = None,
                          at: int = None):
         """
         Try to start a sprint on the server.
 
-        :param SlashContext context: Context in which this command was called.
+        :param CommandContext context: Context in which this command was called.
         :param int length: Length of time (in minutes) the sprint should last.
-        :param int start: Time in minutes from now, that the sprint should start.
+        :param int in_: Time in minutes from now, that the sprint should start.
         :param int at: Time in minutes past the hour, that the sprint should start.
         """
         # in case that the command takes a lot of time
         await context.defer()
 
         if not Guild(context.guild).is_command_enabled('sprint'):
-            return await context.reply(
+            return await context.send(
                 lib.get_string('err:disabled', context.guild_id),
                 hidden=True
             )
 
-        user = User(context.author_id, context.guild_id, context)
+        user = User(context.author.id, context.guild_id, context)
         sprint = Sprint(context.guild_id)
 
         # Check if sprint is finished but not marked as completed, in which case we can mark it as complete
@@ -99,15 +106,15 @@ class SprintCommand(commands.Cog):
         delay: int = 0
 
         # Make sure that the user didn't enter both `at` and `in`
-        if start is not None and at is not None:
+        if in_ is not None and at is not None:
             return context.send(context.author.mention + ', ' + lib.get_string('sprint:err:for:exclusive', context.guild_id))
 
         # ensure that delay is in valid range
-        if start is not None:
-            if start < 0 or start > self.MAX_DELAY:
+        if in_ is not None:
+            if in_ < 0 or in_ > self.MAX_DELAY:
                 delay = self.DEFAULT_DELAY
             else:
-                delay = start
+                delay = in_
 
         if at is not None:
             # Make sure the user has set their timezone, otherwise we can't calculate it.
@@ -135,47 +142,49 @@ class SprintCommand(commands.Cog):
             end=end_time,
             end_reference=end_time,
             length=length,
-            createdby=context.author_id,
+            createdby=context.author.id,
             created=now
         )
 
         # Join the sprint
-        sprint.join(context.author_id)
+        sprint.join(context.author.id)
 
         # Increment the user's stat for sprints created
         user.add_stat('sprints_started', 1)
 
-        # Are we starting immediately or after a delay?
-        if delay == 0:
-            # Immediately. That means we need to schedule the end task.
-            Task.schedule(sprint.TASKS['end'], end_time, 'sprint', sprint.get_id())
-            return await sprint.post_start(context)
-        else:
+        if delay != 0:
             # Delay. That means we need to schedule the start task, which will in turn schedule the end task once it's run.
+            # await sprint.post_delayed_start(context)
+            await context.send("Started!")
+            await sleep(delay=delay*60)
             Task.schedule(sprint.TASKS['start'], start_time, 'sprint', sprint.get_id())
-            return await sprint.post_delayed_start(context)
+            return await (await context.get_channel()).send("After Delay!")
+        # Are we starting immediately or after a delay?
+        else:
+            # Immediately. That means we need to schedule the end task.
+            # Task.schedule(sprint.TASKS['end'], end_time, 'sprint', sprint.get_id())
+            pass
+            # return await sprint.post_start(context)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="join",
         description="Join sprint",
         options=[
-            create_option(
+            Option(
                 name="initial",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=True,
                 description="Initial word count"
             ),
-            create_option(
-                name="project",
-                option_type=SlashCommandOptionType.STRING,
+            Option(
+                name="shortname",
+                type=OptionType.STRING,
                 required=False,
                 description="Project to sprint in"
             )
-        ],
-        connector={'project': 'shortname'}
+        ]
     )
-    async def sprint_join(self, context: SlashContext, initial: int, shortname: str = None):
+    async def sprint_join(self, context: CommandContext, initial: int, shortname: str = None):
         user: User
         sprint: Sprint
         err: bool
@@ -183,17 +192,17 @@ class SprintCommand(commands.Cog):
         if err:
             return
 
-        if sprint.is_user_sprinting(context.author_id):
+        if sprint.is_user_sprinting(context.author.id):
 
             # Update the sprint_users record. We set their current_wc to the same as starting_wc here, otherwise if they join with, say 50 and their current remains 0
             # then if they run a status, or in the ending calculations, it will say they wrote -50.
-            sprint.update_user(context.author_id, start=initial, current=initial, sprint_type=None)
+            sprint.update_user(context.author.id, start=initial, current=initial, sprint_type=None)
             # Send message back to channel letting them know their starting word count was updated
             await context.send(context.author.mention + ', ' + lib.get_string('sprint:join:update', context.guild_id).format(initial))
 
         else:
             # Join the sprint
-            sprint.join(context.author_id, starting_wc=initial, sprint_type=None)
+            sprint.join(context.author.id, starting_wc=initial, sprint_type=None)
 
             # Send message back to channel letting them know their starting word count was updated
             await context.send(context.author.mention + ', ' + lib.get_string('sprint:join', context.guild_id).format(initial))
@@ -202,25 +211,23 @@ class SprintCommand(commands.Cog):
         if shortname is not None:
             await self._set_project(context, shortname)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="join-no-wc",
         description="Join a sprint without counting words",
         options=[
-            create_option(
-                name="project",
-                option_type=SlashCommandOptionType.STRING,
+            Option(
+                name="shortname",
+                type=OptionType.STRING,
                 required=False,
                 description="Project to sprint in"
             )
         ],
-        connector={'project': 'shortname'}
     )
-    async def sprint_join_no_wc(self, context: SlashContext, shortname: str = None):
+    async def sprint_join_no_wc(self, context: CommandContext, shortname: str = None):
         """
         Join a sprint without counting words
 
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         :param str shortname: Project shortname
         """
         user: User
@@ -230,10 +237,12 @@ class SprintCommand(commands.Cog):
         if err:
             return
 
-        if sprint.is_user_sprinting(context.author_id):
-            sprint.update_user(context.author_id, start=0, current=0, sprint_type=Sprint.SPRINT_TYPE_NO_WORDCOUNT)
+        if sprint.is_user_sprinting(context.author.id):
+            sprint.update_user(context.author.id, start=0, current=0,
+                               sprint_type=Sprint.SPRINT_TYPE_NO_WORDCOUNT)
         else:
-            sprint.join(context.author_id, starting_wc=0, sprint_type=Sprint.SPRINT_TYPE_NO_WORDCOUNT)
+            sprint.join(context.author.id, starting_wc=0,
+                        sprint_type=Sprint.SPRINT_TYPE_NO_WORDCOUNT)
 
         await context.send(
             context.author.mention + ', ' + lib.get_string('sprint:join:update:no_wordcount', context.guild_id))
@@ -242,16 +251,15 @@ class SprintCommand(commands.Cog):
         if shortname is not None:
             await self._set_project(context, shortname)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="join-same",
         description="Join a sprint from where you left off last sprint"
     )
-    async def sprint_join_same(self, context: SlashContext):
+    async def sprint_join_same(self, context: CommandContext):
         """
         Join this sprint with the same project as last sprint and with the ending wc.
 
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         user: User
         sprint: Sprint
@@ -275,22 +283,21 @@ class SprintCommand(commands.Cog):
         await self.sprint_join.func(self=self, context=context, initial=starting_wc)
         return await self._set_project(context, project_id=project_id)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="wc",
         description="Declare total word count",
         options=[
-            create_option(
+            Option(
                 name="amount",
                 description="How many words do you have written at the end of this sprint? (including initial wc)",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=True)
         ]
     )
-    async def sprint_wc(self, context: SlashContext, amount: int):
+    async def sprint_wc(self, context: CommandContext, amount: int):
         """
         Declare user's current word count for the sprint
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         :param int amount: how many words the user has
         """
         user: User
@@ -311,7 +318,7 @@ class SprintCommand(commands.Cog):
                 lib.get_string('sprint:err:notstarted', context.guild_id))
 
         # Get the user's sprint info
-        user_sprint = sprint.get_user_sprint(context.author_id)
+        user_sprint = sprint.get_user_sprint(context.author.id)
 
         # If they joined without a word count, they can't add one.
         if user_sprint['sprint_type'] == Sprint.SPRINT_TYPE_NO_WORDCOUNT:
@@ -329,23 +336,22 @@ class SprintCommand(commands.Cog):
 
         return await self._increment_words(context, sprint, user, amount)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="wrote",
         description="Declare words written this sprint",
         options=[
-            create_option(
+            Option(
                 name="amount",
                 description="How many words did you write *in this sprint*? (not including your starting wc)",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=True)
         ]
     )
-    async def sprint_wrote(self, context: SlashContext, amount: int):
+    async def sprint_wrote(self, context: CommandContext, amount: int):
         """
         Declare how many words you wrote this sprint (ie a calculation)
 
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         :param int amount: how many words you wrote.
         """
         user: User
@@ -363,7 +369,7 @@ class SprintCommand(commands.Cog):
             return
 
         # Get the user's sprint info
-        user_sprint = sprint.get_user_sprint(context.author_id)
+        user_sprint = sprint.get_user_sprint(context.author.id)
 
         # If they joined without a word count, they can't add one.
         if user_sprint['sprint_type'] == Sprint.SPRINT_TYPE_NO_WORDCOUNT:
@@ -375,15 +381,14 @@ class SprintCommand(commands.Cog):
 
         return await self._increment_words(context, sprint, user, new_amount)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="cancel",
         description="Cancel a sprint"
     )
-    async def sprint_cancel(self, context: SlashContext):
+    async def sprint_cancel(self, context: CommandContext):
         """
         Cancel a running sprint on the server
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         user: User
         sprint: Sprint
@@ -393,7 +398,7 @@ class SprintCommand(commands.Cog):
             return
 
         # If they do not have permission to cancel this sprint, display an error
-        if int(sprint.get_createdby()) != context.author_id and context.author.permissions_in(
+        if int(sprint.get_createdby()) != context.author.id and context.author.permissions_in(
                 context.channel).manage_messages is not True:
             return await context.send(
                 context.author.mention + ', ' + lib.get_string('sprint:err:cannotcancel', context.guild_id))
@@ -410,15 +415,14 @@ class SprintCommand(commands.Cog):
         message = message + ', '.join(notify)
         return await context.send(message)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="end",
         description="End a sprint"
     )
-    async def sprint_end(self, context: SlashContext):
+    async def sprint_end(self, context: CommandContext):
         """
         Manually force the sprint to end (if the cron hasn't posted the message) and ask for final word counts
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         user: User
         sprint: Sprint
@@ -428,7 +432,7 @@ class SprintCommand(commands.Cog):
             return
 
         # If they do not have permission to cancel this sprint, display an error
-        if int(sprint.get_createdby()) != context.author_id and context.author.permissions_in(
+        if int(sprint.get_createdby()) != context.author.id and context.author.permissions_in(
                 context.channel).manage_messages is not True:
             return await context.send(
                 context.author.mention + ', ' + lib.get_string('sprint:err:cannotend', context.guild_id))
@@ -437,25 +441,26 @@ class SprintCommand(commands.Cog):
         if not await self._check_sprint_started(context, sprint):
             return
 
-        # Change the end reference to now, otherwise wpm calculations will be off, as it will use the time in the future when it was supposed to end.
+        # Change the end reference to now, otherwise wpm calculations will be off,
+        # as it will use the time in the future when it was supposed to end.
         sprint.update_end_reference(int(time.time()))
 
         # Since we are forcing the end, we should cancel any pending tasks for this sprint
         Task.cancel('sprint', sprint.get_id())
 
-        # We need to set the bot into the sprint object, as we will need it when trying to get the guild object
+        # We need to set the bot into the sprint object,
+        # as we will need it when trying to get the guild object
         sprint.set_bot(self.bot)
         return await sprint.end(context)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="leave",
         description="Leave a sprint"
     )
-    async def sprint_leave(self, context: SlashContext):
+    async def sprint_leave(self, context: CommandContext):
         """
         Leave the sprint
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         user: User
         sprint: Sprint
@@ -465,7 +470,7 @@ class SprintCommand(commands.Cog):
             return
 
         # Remove the user from the sprint
-        sprint.leave(context.author_id)
+        sprint.leave(context.author.id)
 
         await context.send(
             context.author.mention + ', ' + lib.get_string('sprint:leave', context.guild_id))
@@ -482,23 +487,22 @@ class SprintCommand(commands.Cog):
             # Display a message letting users know
             return await context.send(lib.get_string('sprint:leave:cancelled', context.guild_id))
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="time",
         description="Get how long is left in the sprint"
     )
-    async def sprint_time(self, context: SlashContext):
+    async def sprint_time(self, context: CommandContext):
         """
         Get how long is left in the sprint
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         # in case that the command takes a lot of time
         await context.defer()
 
         if not Guild(context.guild).is_command_enabled('sprint'):
-            return await context.reply(
+            return await context.send(
                 lib.get_string('err:disabled', context.guild_id),
-                hidden=True
+                ephemeral=True
             )
 
         sprint = Sprint(context.guild_id)
@@ -529,15 +533,14 @@ class SprintCommand(commands.Cog):
             return await context.send(
                 context.author.mention + ', ' + lib.get_string('sprint:waitingforwc', context.guild_id))
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="status",
         description="Get your status in the current sprint"
     )
-    async def sprint_status(self, context: SlashContext):
+    async def sprint_status(self, context: CommandContext):
         """
         Get the user's status in this sprint
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         user: User
         sprint: Sprint
@@ -547,7 +550,7 @@ class SprintCommand(commands.Cog):
             return
 
         # If the user is not sprinting, then again, just display that error
-        if not sprint.is_user_sprinting(context.author_id):
+        if not sprint.is_user_sprinting(context.author.id):
             return await context.send(
                 context.author.mention + ', ' + lib.get_string('sprint:err:notjoined', context.guild_id))
 
@@ -556,7 +559,7 @@ class SprintCommand(commands.Cog):
             return
 
         # If they are sprinting, then display their current status.
-        user_sprint = sprint.get_user_sprint(context.author_id)
+        user_sprint = sprint.get_user_sprint(context.author.id)
 
         # Build the variables to be passed into the status string
         now = int(time.time())
@@ -573,27 +576,26 @@ class SprintCommand(commands.Cog):
             .format(current, written, elapsed, wpm, left)
         )
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="pb",
         description="Get the user's personal best for sprinting"
     )
-    async def sprint_pb(self, context: SlashContext):
+    async def sprint_pb(self, context: CommandContext):
         """
         Get the user's personal best for sprinting
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         :return:
         """
         # in case that the command takes a lot of time
         await context.defer()
 
         if not Guild(context.guild).is_command_enabled('sprint'):
-            return await context.reply(
+            return await context.send(
                 lib.get_string('err:disabled', context.guild_id),
                 hidden=True
             )
 
-        user = User(context.author_id, context.guild_id, context)
+        user = User(context.author.id, context.guild_id, context)
         record = user.get_record('wpm')
 
         if record is None:
@@ -603,22 +605,21 @@ class SprintCommand(commands.Cog):
             return await context.send(
                 context.author.mention + ', ' + lib.get_string('sprint:pb', context.guild_id).format(int(record)))
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="notify",
         description="Set whether you will be notified of upcoming sprints on this server",
         options=[
-            create_option(
+            Option(
                 name="notify",
                 description="Whether or not to notify",
-                option_type=SlashCommandOptionType.INTEGER,
+                type=OptionType.INTEGER,
                 required=True,
                 choices=[
-                    create_choice(
+                    Choice(
                         name="Notify",
                         value=1
                     ),
-                    create_choice(
+                    Choice(
                         name="Do not notify",
                         value=0
                     )
@@ -626,21 +627,21 @@ class SprintCommand(commands.Cog):
             )
         ]
     )
-    async def sprint_notify(self, context: SlashContext, notify: int):
+    async def sprint_notify(self, context: CommandContext, notify: int):
         """
         Set a user to be notified of upcoming sprints on this server.
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         # in case that the command takes a lot of time
         await context.defer()
 
         if not Guild(context.guild).is_command_enabled('sprint'):
-            return await context.reply(
+            return await context.send(
                 lib.get_string('err:disabled', context.guild_id),
                 hidden=True
             )
 
-        user = User(context.author_id, context.guild_id, context)
+        user = User(context.author.id, context.guild_id, context)
         user.set_guild_setting('sprint_notify', str(notify))
         message = context.author.mention + ', '
         if notify == 1:
@@ -649,21 +650,20 @@ class SprintCommand(commands.Cog):
             message += lib.get_string('sprint:forgot', context.guild_id)
         return await context.send(message)
 
-    @cog_ext.cog_subcommand(
-        base="sprint",
+    @sprint_base.subcommand(
         name="purge",
         description="Purge any users who asked for notifications but aren't in the server any more."
     )
-    async def sprint_purge(self, context: SlashContext):
+    async def sprint_purge(self, context: CommandContext):
         """
         Purge any users who asked for notifications but aren't on the server anymore.
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
         # in case that commands take a long time
-        await context.defer(hidden=True)
+        await context.defer(ephemeral=True)
 
         if not Guild(context.guild).is_command_enabled('sprint'):
-            return await context.reply(
+            return await context.send(
                 lib.get_string('err:disabled', context.guild_id),
                 hidden=True
             )
@@ -678,9 +678,9 @@ class SprintCommand(commands.Cog):
         else:
             return await context.send(lib.get_string('sprint:purged:none', context.guild_id))
 
-    @cog_ext.cog_component(
+    @extension_component(
         components=PROJECT_SELECTOR_ID,
-        component_type=ComponentType.select
+        component_type=ComponentType.SELECT
     )
     async def component_set_project(self, context: ComponentContext):
         # in case that the command takes a lot of time
@@ -689,13 +689,13 @@ class SprintCommand(commands.Cog):
         return await self._set_project(context, shortname=context.selected_options[0])
 
     @classmethod
-    async def _set_project(cls, context: InteractionContext, shortname: str = None,
+    async def _set_project(cls, context: Union[CommandContext, ComponentContext], shortname: str = None,
                            project_id: int = None):
         """
         Internal utility function: Set the project the user wants to sprint in.
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         """
-        user = User(context.author_id, context.guild_id, context)
+        user = User(context.author.id, context.guild_id, context)
         sprint = Sprint(context.guild_id)
 
         project: Optional[Project]
@@ -706,7 +706,7 @@ class SprintCommand(commands.Cog):
                 context.author.mention + ', ' + lib.get_string('sprint:err:noexists', context.guild_id))
 
         # If the user is not sprinting, then again, just display that error
-        if not sprint.is_user_sprinting(context.author_id):
+        if not sprint.is_user_sprinting(context.author.id):
             return await context.send(
                 context.author.mention + ', ' + lib.get_string('sprint:err:notjoined', context.guild_id))
 
@@ -728,22 +728,22 @@ class SprintCommand(commands.Cog):
         else:
             project = Project(project_id)
 
-        sprint.set_project(project.get_id(), context.author_id)
+        sprint.set_project(project.get_id(), context.author.id)
         return await context.send(
             context.author.mention + ', ' +
             lib.get_string('sprint:project', context.guild_id).format(project.name))
 
     @classmethod
-    async def _common_init(cls, context: InteractionContext, hidden: bool = False) -> (User, Sprint, bool):
+    async def _common_init(cls, context: CommandContext, hidden: bool = False) -> (User, Sprint, bool):
         if not Guild(context.guild).is_command_enabled('sprint'):
-            return await context.reply(
+            return await context.send(
                 lib.get_string('err:disabled', context.guild_id),
                 hidden=True
             )
         if not context.deferred:
-            await context.defer(hidden=hidden)
+            await context.defer(ephemeral=hidden)
 
-        user = User(context.author_id, context.guild_id, context)
+        user = User(context.author.id, context.guild_id, context)
         sprint = Sprint(context.guild_id)
 
         # If there is no active sprint, then just display an error
@@ -755,14 +755,15 @@ class SprintCommand(commands.Cog):
             return user, sprint, False
 
     @classmethod
-    async def _increment_words(cls, context: InteractionContext, sprint: Sprint, user: User,
+    async def _increment_words(cls, context: CommandContext, sprint: Sprint, user: User,
                                amount: int):
-        user_sprint = sprint.get_user_sprint(context.author_id)
+        user_sprint = sprint.get_user_sprint(context.author.id)
 
         # Is the sprint finished? If so this will be an ending_wc declaration, not a current_wc one.
         col = 'ending' if sprint.is_finished() else 'current'
 
-        # Before we actually update it, if the WPM is huge and most likely an error, just check with them if they meant to put that many words.
+        # Before we actually update it, if the WPM is huge and most likely an error,
+        # just check with them if they meant to put that many words.
         written = amount - int(user_sprint['starting_wc'])
         seconds = int(sprint.get_end_reference()) - user_sprint['timejoined']
         wpm = Sprint.calculate_wpm(written, seconds)
@@ -781,10 +782,10 @@ class SprintCommand(commands.Cog):
 
         # Update the user's sprint record
         arg = {col: amount}
-        sprint.update_user(context.author_id, **arg)
+        sprint.update_user(context.author.id, **arg)
 
         # Reload the user sprint info
-        user_sprint = sprint.get_user_sprint(context.author_id)
+        user_sprint = sprint.get_user_sprint(context.author.id)
 
         # Which value are we displaying?
         wordcount = user_sprint['ending_wc'] if sprint.is_finished() else user_sprint['current_wc']
@@ -800,10 +801,10 @@ class SprintCommand(commands.Cog):
             await sprint.complete(context)
 
     @classmethod
-    async def _check_sprint_started(cls, context: InteractionContext, sprint: Sprint) -> bool:
+    async def _check_sprint_started(cls, context: CommandContext, sprint: Sprint) -> bool:
         """
         Check that the sprint started
-        :param SlashContext context: context this command was invoked in.
+        :param CommandContext context: context this command was invoked in.
         :param Sprint sprint: the sprint on this server.
         :return: True if sprint has started
         """
@@ -814,46 +815,16 @@ class SprintCommand(commands.Cog):
         return False
 
     @classmethod
-    async def _check_is_in_sprint(cls, context: InteractionContext, sprint: Sprint) -> bool:
-        if sprint.is_user_sprinting(context.author_id):
+    async def _check_is_in_sprint(cls, context: CommandContext, sprint: Sprint) -> bool:
+        if sprint.is_user_sprinting(context.author.id):
             return True
 
         await context.send(
             context.author.mention + ', ' + lib.get_string('sprint:err:notjoined', context.guild_id))
         return False
 
-    @commands.command(name="sprint", aliases=['spring'])
-    @commands.guild_only()
-    async def old(self, context):
-        """
-        Write with your friends and see who can write the most in the time limit!
-        When choosing a length and start delay, there are maximums of 60 minutes length of sprint, and 24 hours delay until sprint begins.
-        NOTE: The bot checks for sprint changes every 30 seconds, so your start/end times might be off by +-30 seconds or so.
+    sprint_base.finish()
 
-        Run `help sprint` for more extra information, including any custom server settings related to sprints.
 
-        Examples:
-            `sprint start` - Quickstart a sprint with the default settings.
-            `sprint for 20 in 3` - Schedules a sprint for 20 minutes, to start in 3 minutes.
-            `sprint cancel` - Cancels the current sprint. This can only be done by the person who created the sprint, or any users with the MANAGE_MESSAGES permission.
-            `sprint join` - Joins the current sprint.
-            `sprint join 100` - Joins the current sprint, with a starting word count of 100.
-            `sprint join 100 sword` - Joins the current sprint, with a starting word count of 100 and sets your sprint to count towards your Project with the shortname "sword" (See: Projects for more info).
-            `sprint join same` - Use the keyword `same` to join the sprint using the same Project and Final Word Count from your most recent sprint.
-            `sprint leave` - Leaves the current sprint.
-            `sprint project sword` - Sets your sprint to count towards your Project with the shortname "sword" (See: Projects for more info).
-            `sprint wc 250` - Declares your final word count at 250.
-            `sprint time` - Displays the time left in the current sprint.
-            `sprint pb` - Displays your personal best wpm from sprints on this server. Run sprint pb reset to reset your personal best to 0 on the current server.
-            `sprint notify` - You will be notified when someone starts a new sprint.
-            `sprint forget` - You will no longer be notified when someone starts a new sprint.
-            `sprint status` - Shows you your current word count on the sprint.
-
-        **Sprint Tips**
-        If you join the sprint with a starting word count, remember to declare your total word count at the end, not just the amount of words you wrote in the sprint.
-        e.g. If you joined with 1000 words, and during the sprint you wrote another 500 words, the final word count you should declare would be 1500
-        """
-        return await context.send(lib.get_string('err:slash', context.guild.id))
-
-def setup(bot):
-    bot.add_cog(SprintCommand(bot))
+def setup(bot: Client):
+    return SprintCommand(bot)

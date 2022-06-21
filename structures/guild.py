@@ -3,6 +3,7 @@ from operator import itemgetter
 from structures.db import Database
 from structures.user import User
 
+
 class Guild:
 
     TOP_LIMIT = 10

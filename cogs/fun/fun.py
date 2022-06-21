@@ -1,42 +1,33 @@
-import json
-import lib
 import random
-from discord.ext import commands
-from discord_slash import cog_ext, SlashContext
-from discord_slash.model import SlashCommandOptionType
-from discord_slash.utils.manage_commands import create_option, create_choice
+
+import interactions
+from interactions import Client, extension_command as command, Option, OptionType, CommandContext
+
+import lib
 from structures.guild import Guild
 
-class Fun(commands.Cog):
+
+class Fun(interactions.Extension):
 
     ROLL_MAX_SIDES = 1000000000000
     ROLL_MAX_ROLLS = 100
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: Client):
+        self.bot: Client = bot
 
-    @commands.command(name="8ball", aliases=["flip", "quote", "reassure", "roll"])
-    @commands.guild_only()
-    async def old(self, context):
-        """
-        Migrated command, so just display a message for now.
-
-        :param context: Discord context
-        """
-        return await context.send(lib.get_string('err:slash', context.guild.id))
-
-    @cog_ext.cog_slash(
+    @command(
         name="8ball",
         description="Ask the magic 8ball a question",
         options=[
-            create_option(
+            Option(
                 name="question",
                 description="What is your question for the magic 8ball?",
-                option_type=SlashCommandOptionType.STRING,
+                type=OptionType.STRING,
                 required=True
             )
-    ])
-    async def _8ball(self, context: SlashContext, question: str):
+        ]
+    )
+    async def _8ball(self, context: CommandContext, question: str):
         """
         Ask the magic 8-ball a question.
 
@@ -60,13 +51,15 @@ class Fun(commands.Cog):
 
         # Send the message
         await context.send(
-            context.author.mention + ', ' + lib.get_string('8ball:yourquestion', guild_id).format(question) + answer)
+            context.author.mention + ', ' +
+            lib.get_string('8ball:yourquestion', guild_id).format(question) + answer
+        )
 
-    @cog_ext.cog_slash(
+    @command(
         name="flip",
         description="Flip a coin"
     )
-    async def flip(self, context: SlashContext):
+    async def flip(self, context: CommandContext):
         """
         Flips a coin.
 
@@ -90,11 +83,11 @@ class Fun(commands.Cog):
         # Send the message.
         await context.send(lib.get_string('flip:' + side, guild_id))
 
-    @cog_ext.cog_slash(
+    @command(
         name="quote",
         description="Generate a random motivational quote"
     )
-    async def quote(self, context: SlashContext):
+    async def quote(self, context: CommandContext):
         """
         A random motivational quote to inspire you.
 
@@ -121,18 +114,19 @@ class Fun(commands.Cog):
         # Send the message
         await context.send(format(quote['quote'] + ' - *' + quote['name'] + '*'))
 
-    @cog_ext.cog_slash(
+    @command(
         name="reassure",
         description="Send a random reassuring message to a user or yourself",
         options=[
-            create_option(
+            Option(
                 name="who",
                 description="Who do you want to reassure?",
-                option_type=SlashCommandOptionType.USER,
+                option_type=OptionType.USER,
                 required=False
             )
-    ])
-    async def reassure(self, context: SlashContext, who: str = None):
+        ]
+    )
+    async def reassure(self, context: CommandContext, who: interactions.User = None):
         """
         Reassures you that everything will be okay.
 
@@ -165,20 +159,22 @@ class Fun(commands.Cog):
         # Send the message.
         await context.send(mention + ', ' + format(quote))
 
-    @cog_ext.cog_slash(
+    @command(
         name="roll",
         description="Roll some dice",
         options=[
-            create_option(
+            Option(
                 name="dice",
                 description="What dice do you want to roll? Format: {number}d{sides}, e.g. 1d20, 2d8, etc... Default: 1d6",
-                option_type=SlashCommandOptionType.STRING,
+                option_type=OptionType.STRING,
                 required=False
             )
-    ])
-    async def roll(self, context, dice: str = '1d6'):
+        ]
+    )
+    async def roll(self, context: CommandContext, dice: str = '1d6'):
         """
-        Rolls a dice between 1-6, or 1 and a specified number (max 100). Can also roll multiple dice at once (max 100) and get the total.
+        Rolls a dice between 1-6, or 1 and a specified number (max 100).
+        Can also roll multiple dice at once (max 100) and get the total.
 
         :param SlashContext context: SlashContext object
         :param str dice: The dice to roll, e.g. 1d6, 2d10, etc...
@@ -194,13 +190,13 @@ class Fun(commands.Cog):
 
         guild_id = context.guild_id
 
+        import re
         # Make sure the format is correct (1d6).
-        try:
-            sides = int(dice.split('d')[1])
-            rolls = int(dice.split('d')[0])
-        except Exception as e:
-            await context.send(lib.get_string('roll:format', guild_id));
-            return
+        regex_matches = re.search(r'(\d)d(\d)', dice)
+        if regex_matches is None:
+            return await context.send(lib.get_string('roll:format', guild_id))
+        else:
+            sides, rolls = regex_matches.group(1, 2)
 
         # Make sure the sides and rolls are valid.
         if sides < 1:
@@ -223,15 +219,16 @@ class Fun(commands.Cog):
             output += ' [ ' + str(val) + ' ] '
 
         # Now print out the total.
-        output += '\n**' + lib.get_string('roll:total', guild_id) + str(total) + '**';
+        output += '\n**' + lib.get_string('roll:total', guild_id) + str(total) + '**'
 
         # Send message.
         await context.send(output)
 
-def setup(bot):
+
+def setup(bot: Client):
     """
     Add the cog to the bot
     :param bot: Discord bot
     :rtype void:
     """
-    bot.add_cog(Fun(bot))
+    Fun(bot)
